@@ -1,7 +1,7 @@
 import {API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic} from 'homebridge';
 import {Configuration} from './Schemas/configuration';
 import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
-import {HomeworksAccessory, HomeworksShadeAccessory} from './homeworksAccessory';
+import {HomeworksAccessory, HomeworksMotorShadeAccessory, HomeworksShadeAccessory} from './homeworksAccessory';
 import {NetworkEngine} from './network';
 
 
@@ -100,9 +100,9 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
         if (op === '1') {
           // Set level message from processor
-          const brightness = Number(splitMessage[3]);
-          this.log.debug('[Platform][EngineCallback] Set: %s to: %i', targetDevice.getName(), brightness);
-          targetDevice.updateBrightness(brightness);
+          const level = Number(splitMessage[3]);
+          this.log.debug('[Platform][EngineCallback] Set: %s to: %i', targetDevice.getName(), level);
+          targetDevice.updateLevel(level);
         } else if (op === '32') {
           if (splitMessage.length !== 5) {
             this.log.info('[Platform][EngineCallback] message wrong length %s', singleMessage);
@@ -154,12 +154,24 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
   discoverDevices() {
     //TODO: Move elsewhere. 
     //This will be called when a request from HK comes to change a value in the processor
-    const brightnessChangeCallback = (value: number, isDimmable: boolean, accessory: HomeworksAccessory): void => { //Callback from HK
+    const levelChangeCallback = (value: number, isDimmable: boolean, accessory: HomeworksAccessory): void => { //Callback from HK
       const fadeTime = isDimmable ? '00:01' : '00:00';
 
-      const command = `#OUTPUT,${accessory.getIntegrationId()},1,${value},${fadeTime}`;
+      let command : string;
+      if (accessory instanceof HomeworksMotorShadeAccessory) {
+        if (value > 67) {
+          command = `#OUTPUT,${accessory.getIntegrationId()},2`;
+        } else if (value < 34) {
+          command = `#OUTPUT,${accessory.getIntegrationId()},3`;
+        } else {
+          command = `#OUTPUT,${accessory.getIntegrationId()},4`;
+        }
+      } else {
+        command = `#OUTPUT,${accessory.getIntegrationId()},1,${value},${fadeTime}`;
+      }
 
-      accessory.updateBrightness(value); //Shall we update it locally?
+
+      accessory.updateLevel(value); //Shall we update it locally?
 
       this.log.debug('[Platform][setLutronCallback] %s to %s (%s)', accessory.getName(), value, command);
       this.engine.send(command);
@@ -174,7 +186,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       if (typeof (confDevice.name) !== 'string' ||
         typeof (confDevice.isDimmable) !== 'boolean' ||
         typeof (confDevice.integrationID) !== 'string' ||
-        (confDevice.deviceType !== 'light' && confDevice.deviceType !== 'shade')
+        (confDevice.deviceType !== 'light' && confDevice.deviceType !== 'shade' && confDevice.deviceType !== 'motorshade')
       ) {
         this.log.error('[platform][Error] Unable to load accessory: %s', confDevice.name);
         continue;
@@ -209,7 +221,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       // eslint-disable-next-line max-len
       const hwa = HomeworksAccessory.CreateAccessory(this, loadedAccessory, loadedAccessory.UUID, confDevice);
       this.homeworksAccessories.push(hwa);
-      hwa.lutronLevelChangeCallback = brightnessChangeCallback;
+      hwa.lutronLevelChangeCallback = levelChangeCallback;
       allAddedAccesories.push(loadedAccessory);
     }
 

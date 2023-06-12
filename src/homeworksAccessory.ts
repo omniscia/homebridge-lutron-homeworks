@@ -22,6 +22,8 @@ export class HomeworksAccessory {
     switch (config.deviceType) {
       case 'shade':
         return new HomeworksShadeAccessory(platform, accessory, uuid, config);
+      case 'motorshade':
+        return new HomeworksMotorShadeAccessory(platform, accessory, uuid, config);
       default:
       case 'light':
         return new HomeworksLightAccessory(platform, accessory, uuid, config);
@@ -80,8 +82,8 @@ export class HomeworksAccessory {
    * Called from processor when we need to update Homekit
    * With new values from processor. (set externally)
    */
-  public updateBrightness(targetBrightnessVal: CharacteristicValue) {
-    this._platform.log.error('[Accessory][HomeworksAccessory] [%s] updateBrightness %s not overridden', this._name, targetBrightnessVal);
+  public updateLevel(targetLevelVal: CharacteristicValue) {
+    this._platform.log.error('[Accessory][HomeworksAccessory] [%s] updateLevel %s not overridden', this._name, targetLevelVal);
   }
 
 }
@@ -219,8 +221,8 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
    * Called from processor when we need to update Homekit
    * With new values from processor.
    */
-  public updateBrightness(targetBrightnessVal: CharacteristicValue) {
-    this._platform.log.info('[Accessory][%s][updateBrightness] to %i', this._name, targetBrightnessVal);
+  public updateLevel(targetBrightnessVal: CharacteristicValue) {
+    this._platform.log.info('[Accessory][%s][updateLevel to brightness] to %i', this._name, targetBrightnessVal);
 
     if (targetBrightnessVal === this._dimmerState.Brightness) { //If the value is the same. Ignore to save network traffic.
       return;
@@ -386,10 +388,10 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
    * Called from processor when we need to update Homekit
    * With new values from processor. (set externally)
    */
-  public updateBrightness(targetBrightnessVal: CharacteristicValue) {
-    this._platform.log.info('[Accessory][%s][updateBrightness] to %i', this._name, targetBrightnessVal);
+  public updateLevel(targetLevelVal: CharacteristicValue) {
+    this._platform.log.info('[Accessory][%s][updateLevel to height] to %i', this._name, targetLevelVal);
 
-    const targetPositionNumber = targetBrightnessVal as number;
+    const targetPositionNumber = targetLevelVal as number;
 
     //  If there is no change, then there's nothing for us to do
     if (targetPositionNumber === this._shadeState.Position) {
@@ -418,3 +420,5 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._service.updateCharacteristic(this._platform.Characteristic.PositionState, this._shadeState.PositionState);
   }
 }
+
+export class HomeworksMotorShadeAccessory extends HomeworksShadeAccessory {}

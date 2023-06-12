@@ -41,7 +41,8 @@
               "oneOf":
               [
                 { "title": "Light", "enum": ["light"] },
-                { "title": "Shade", "enum": ["shade"] }
+                { "title": "Shade", "enum": ["shade"] },
+                { "title": "MotorShade", "enum":  ["motorshade"] }
               ],
               "required": true,
               "placeholder": "light"
