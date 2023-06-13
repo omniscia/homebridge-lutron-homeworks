@@ -2,7 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallb
 import { HomeworksPlatform } from './platform';
 import { ConfigDevice} from './Schemas/device';
 
-interface SetLutronLevelCallback { (value: number, isDimmable:boolean, Accessory:HomeworksAccessory): void }
+interface SetLutronLevelCallback { (value: number, Accessory:HomeworksAccessory): void }
 
 
 //*************************************
@@ -24,8 +24,8 @@ export class HomeworksAccessory {
         return new HomeworksShadeAccessory(platform, accessory, uuid, config);
       case 'motorshade':
         return new HomeworksMotorShadeAccessory(platform, accessory, uuid, config);
-      case 'rgbwlight':
-        return new HomeworksRgbwLightAccessory(platform, accessory, uuid, config);
+      case 'dmxlight':
+        return new HomeworksDmxLightAccessory(platform, accessory, uuid, config);
       default:
       case 'light':
         return new HomeworksLightAccessory(platform, accessory, uuid, config);
@@ -163,12 +163,12 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
       this._dimmerState.Brightness = 0;
     }
 
-    if (!this.getIsDimmable()) { //If we are not dimmable. Assume 100% brightness on on state.
+    if (!isDimmable) { //If we are not dimmable. Assume 100% brightness on on state.
       this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
     }
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(this._dimmerState.Brightness, isDimmable, this);
+      this.lutronLevelChangeCallback(this._dimmerState.Brightness, this);
     }
 
     this._platform.log.debug('[Accessory][%s][setOn] [state: %s|dim: %s]', this._name, this._dimmerState.On, this.getIsDimmable());
@@ -209,7 +209,7 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
     this._dimmerState.Brightness = targetBrightnessVal;
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(targetBrightnessVal, this.getIsDimmable(), this);
+      this.lutronLevelChangeCallback(targetBrightnessVal, this);
     }
 
 
@@ -327,7 +327,7 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._shadeState.Position = positionNumber;
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(this._shadeState.Position, false, this);
+      this.lutronLevelChangeCallback(this._shadeState.Position, this);
     }
 
     callback(null); // null or error
@@ -358,7 +358,7 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._shadeState.TargetPosition = targetPositionNumber;
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(this._shadeState.TargetPosition, false, this);
+      this.lutronLevelChangeCallback(this._shadeState.TargetPosition, this);
     }
 
     callback(null); // null or error
@@ -425,12 +425,14 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
 
 export class HomeworksMotorShadeAccessory extends HomeworksShadeAccessory {}
 
-export class HomeworksRgbwLightAccessory extends HomeworksAccessory {
+export class HomeworksDmxLightAccessory extends HomeworksAccessory {
   private _service: Service;
 
-  public _dimmerState = {
+  public _colorState = {
     On: false,
     Brightness: 0,
+    Saturation: 0,
+    Hue: 0,
     PositionState: 2,
   };
 
@@ -453,23 +455,18 @@ export class HomeworksRgbwLightAccessory extends HomeworksAccessory {
       .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
       .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
     // register handlers for the Brightness Characteristic
-    if (this._config.isDimmable) {
-      this._service.getCharacteristic(this._platform.Characteristic.Brightness)
-        .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
-        .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+    this._service.getCharacteristic(this._platform.Characteristic.Brightness)
+      .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
+      .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+    // register handlers for the Brightness Characteristic
+    this._service.getCharacteristic(this._platform.Characteristic.Saturation)
+      .on('set', this.setSaturation.bind(this))       // SET - bind to the 'setSaturation` method below
+      .on('get', this.getSaturation.bind(this));      // GET - bind to the 'getSaturation` method below
+    // register handlers for the Brightness Characteristic
+    this._service.getCharacteristic(this._platform.Characteristic.Hue)
+      .on('set', this.setHue.bind(this))       // SET - bind to the 'setHue` method below
+      .on('get', this.getHue.bind(this));      // GET - bind to the 'getHue` method below
 
-    }
-  }
-
-  //*************************************
-  //* Class Getters
-  /**
-   * Handle the "GET" is dimmable
-   * @example
-   * getIsDimable()
-   */
-  public getIsDimmable() {
-    return this._config.isDimmable;
   }
 
   //*************************************
@@ -480,36 +477,32 @@ export class HomeworksRgbwLightAccessory extends HomeworksAccessory {
    */
 
   private setOn(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
-    const isDimmable = this.getIsDimmable();
-
-    if (targetValue === this._dimmerState.On) {
+    if (targetValue === this._colorState.On) {
       callback(null);
       return;
     }
 
-    this._dimmerState.On = targetValue as boolean;
+    this._colorState.On = targetValue as boolean;
 
     if (targetValue === true) {
-      this._dimmerState.Brightness = 100;
+      this._colorState.Brightness = 100;
     } else {
-      this._dimmerState.Brightness = 0;
+      this._colorState.Brightness = 0;
     }
 
-    if (!this.getIsDimmable()) { //If we are not dimmable. Assume 100% brightness on on state.
-      this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
-    }
+    this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._colorState.Brightness);
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(this._dimmerState.Brightness, isDimmable, this);
+      this.lutronLevelChangeCallback(this._colorState.Brightness, this);
     }
 
-    this._platform.log.debug('[Accessory][%s][setOn] [state: %s|dim: %s]', this._name, this._dimmerState.On, this.getIsDimmable());
+    this._platform.log.debug('[Accessory][%s][setOn] [state: %s|dim: %s]', this._name, this._colorState.On, true);
 
     callback(null);
   }
 
   private getOn(callback: CharacteristicGetCallback) {
-    const isOn = this._dimmerState.On;
+    const isOn = this._colorState.On;
 
     this._platform.log.debug('[Accessory][%s][getOn] is %s', this.getName(), isOn ? 'ON' : 'OFF');
 
@@ -521,7 +514,7 @@ export class HomeworksRgbwLightAccessory extends HomeworksAccessory {
    */
 
   private getBrightness(callback: CharacteristicGetCallback) {
-    const brightness = this._dimmerState.Brightness;
+    const brightness = this._colorState.Brightness;
 
     this._platform.log.debug('[Accessory][%s][getBrightness] -> %i', this._name, brightness);
 
@@ -530,7 +523,7 @@ export class HomeworksRgbwLightAccessory extends HomeworksAccessory {
 
   private setBrightness(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    if (targetValue === this._dimmerState.Brightness) {
+    if (targetValue === this._colorState.Brightness) {
       callback(null);
       return;
     }
@@ -538,16 +531,71 @@ export class HomeworksRgbwLightAccessory extends HomeworksAccessory {
     this._platform.log.debug('[Accessory][%s][setBrightness] -> %i', this.getName(), targetValue);
 
     const targetBrightnessVal = targetValue as number;
-    this._dimmerState.Brightness = targetBrightnessVal;
+    this._colorState.Brightness = targetBrightnessVal;
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(targetBrightnessVal, this.getIsDimmable(), this);
+      this.lutronLevelChangeCallback(targetBrightnessVal, this);
     }
 
 
     callback(null); // null or error
   }
 
+  private getSaturation(callback: CharacteristicGetCallback) {
+    const saturation = this._colorState.Saturation;
+
+    this._platform.log.debug('[Accessory][%s][getSaturation] -> %i', this._name, saturation);
+
+    callback(null, saturation); //error,value
+  }
+
+  private setSaturation(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
+
+    if (targetValue === this._colorState.Saturation) {
+      callback(null);
+      return;
+    }
+
+    this._platform.log.debug('[Accessory][%s][setSaturation] -> %i', this.getName(), targetValue);
+
+    const targetSaturationVal = targetValue as number;
+    this._colorState.Saturation = targetSaturationVal;
+
+    if (this.lutronLevelChangeCallback) {
+      this.lutronLevelChangeCallback(targetSaturationVal, this);
+    }
+
+
+    callback(null); // null or error
+  }
+
+  private getHue(callback: CharacteristicGetCallback) {
+    const hue = this._colorState.Hue;
+
+    this._platform.log.debug('[Accessory][%s][getHue] -> %i', this._name, hue);
+
+    callback(null, hue); //error,value
+  }
+
+  private setHue(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
+
+    if (targetValue === this._colorState.Hue) {
+      callback(null);
+      return;
+    }
+
+    this._platform.log.debug('[Accessory][%s][setHue] -> %i', this.getName(), targetValue);
+
+    const targetHueVal = targetValue as number;
+    this._colorState.Hue = targetHueVal;
+
+    if (this.lutronLevelChangeCallback) {
+      this.lutronLevelChangeCallback(targetHueVal, this);
+    }
+
+
+    callback(null); // null or error
+  }
   //*************************************
   //* Accessory Callbacks
 
@@ -556,20 +604,22 @@ export class HomeworksRgbwLightAccessory extends HomeworksAccessory {
    * With new values from processor.
    */
   public updateLevel(targetBrightnessVal: CharacteristicValue) {
-    this._platform.log.info('[Accessory][%s][updateLevel brightness] to %i', this._name, targetBrightnessVal);
+    this._platform.log.info('[Accessory][%s][updateLevel color] to %i', this._name, targetBrightnessVal);
 
-    if (targetBrightnessVal === this._dimmerState.Brightness) { //If the value is the same. Ignore to save network traffic.
+    if (targetBrightnessVal === this._colorState.Brightness) { //If the value is the same. Ignore to save network traffic.
       return;
     }
 
     if (targetBrightnessVal > 0) {
-      this._dimmerState.On = true;
+      this._colorState.On = true;
     } else if (targetBrightnessVal <= 0) {
-      this._dimmerState.On = false;
+      this._colorState.On = false;
     }
 
-    this._dimmerState.Brightness = targetBrightnessVal as number;
-    this._service.updateCharacteristic(this._platform.Characteristic.On, this._dimmerState.On);
-    this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
+    this._colorState.Brightness = targetBrightnessVal as number;
+    this._service.updateCharacteristic(this._platform.Characteristic.On, this._colorState.On);
+    this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._colorState.Brightness);
+    this._service.updateCharacteristic(this._platform.Characteristic.Saturation, this._colorState.Saturation);
+    this._service.updateCharacteristic(this._platform.Characteristic.Hue, this._colorState.Hue);
   }
 }

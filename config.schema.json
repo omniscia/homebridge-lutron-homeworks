@@ -43,7 +43,7 @@
                 { "title": "Light", "enum": ["light"] },
                 { "title": "Shade", "enum": ["shade"] },
                 { "title": "MotorShade", "enum":  ["motorshade"] },
-                { "title": "RgbwLight", "enum":  ["rgbwlight"] }
+                { "title": "DMXLight", "enum":  ["dmxlight"] }
               ],
               "required": true,
               "placeholder": "light"
