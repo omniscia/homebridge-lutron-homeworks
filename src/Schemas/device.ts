@@ -11,7 +11,7 @@ export interface ConfigDevice {
     /**
      * Gets or sets the integration ID of the light/load/dimmer
      */
-    integrationID: string;
+    integrationIDs: string[];
 
     /**
      * Type of device

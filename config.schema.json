@@ -6,7 +6,7 @@
   "singular": false,
   "schema": {
     "type": "object",
-    "properties": {     
+    "properties": {
       "host": {
         "title": "Homeworks Telnet IP Address",
         "type": "string",
@@ -42,7 +42,8 @@
               [
                 { "title": "Light", "enum": ["light"] },
                 { "title": "Shade", "enum": ["shade"] },
-                { "title": "MotorShade", "enum":  ["motorshade"] }
+                { "title": "MotorShade", "enum":  ["motorshade"] },
+                { "title": "RgbwLight", "enum":  ["rgbwlight"] }
               ],
               "required": true,
               "placeholder": "light"
@@ -53,11 +54,11 @@
               "required": true,
               "placeholder": "Livingroom"
             },
-            "integrationID": {
-              "type": "string",
-              "title": "Integration ID",
+            "integrationIDs": {
+              "type": "string[]",
+              "title": "Integration IDs",
               "required": true,
-              "placeholder": "70"
+              "placeholder": "70,71"
             },
             "isDimmable": {
               "type": "boolean",

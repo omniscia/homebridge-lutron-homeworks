@@ -1,7 +1,7 @@
 import {API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic} from 'homebridge';
 import {Configuration} from './Schemas/configuration';
 import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
-import {HomeworksAccessory, HomeworksMotorShadeAccessory, HomeworksShadeAccessory} from './homeworksAccessory';
+import {HomeworksAccessory, HomeworksMotorShadeAccessory, HomeworksShadeAccessory, HomeworksRgbwLightAccessory} from './homeworksAccessory';
 import {NetworkEngine} from './network';
 
 
@@ -128,9 +128,11 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       //  NOTE: If the device is being updated elsewhere (like another app or switch) this
       //  value may be incorrect
       for (const accessory of this.homeworksAccessories) {
-        this.log.debug('[Platform] Requesting level for:', accessory.getName());
-        const command = `?OUTPUT,${accessory.getIntegrationId()},1`;
-        engine.send(command);
+        for (const integrationId of accessory.getIntegrationIds()) {
+          this.log.debug('[Platform] Requesting level for:', accessory.getName());
+          const command = `?OUTPUT,${integrationId},1`;
+          engine.send(command);
+        }
       }
     };
 
@@ -157,42 +159,48 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     const levelChangeCallback = (value: number, isDimmable: boolean, accessory: HomeworksAccessory): void => { //Callback from HK
       const fadeTime = isDimmable ? '00:01' : '00:00';
 
-      let command : string;
-      if (accessory instanceof HomeworksMotorShadeAccessory) {
-        if (value > 67) {
-          command = `#OUTPUT,${accessory.getIntegrationId()},2`;
-        } else if (value < 34) {
-          command = `#OUTPUT,${accessory.getIntegrationId()},3`;
+      for (const integrationId of accessory.getIntegrationIds()) {
+
+        let command: string;
+        if (accessory instanceof HomeworksMotorShadeAccessory) {
+          if (value > 67) {
+            command = `#OUTPUT,${integrationId},2`;
+          } else if (value < 34) {
+            command = `#OUTPUT,${integrationId},3`;
+          } else {
+            command = `#OUTPUT,${integrationId},4`;
+          }
+        } else if (accessory instanceof HomeworksRgbwLightAccessory) {
+          command = `#OUTPUT,${integrationId},1`;
         } else {
-          command = `#OUTPUT,${accessory.getIntegrationId()},4`;
+          command = `#OUTPUT,${integrationId},1,${value},${fadeTime}`;
         }
-      } else {
-        command = `#OUTPUT,${accessory.getIntegrationId()},1,${value},${fadeTime}`;
+
+        accessory.updateLevel(value); //Shall we update it locally?
+
+        this.log.debug('[Platform][setLutronCallback] %s to %s (%s)', accessory.getName(), value, command);
+        this.engine.send(command);
       }
-
-
-      accessory.updateLevel(value); //Shall we update it locally?
-
-      this.log.debug('[Platform][setLutronCallback] %s to %s (%s)', accessory.getName(), value, command);
-      this.engine.send(command);
     };
 
     //The following will iterate through the config file, check if the device is cached or updated.
     //And also check if we find a device that is no longer in HK but was. And issue a remove.
-    const allAddedAccesories: PlatformAccessory[] = [];
+    const allAddedAccessories: PlatformAccessory[] = [];
 
     for (const confDevice of (this.configuration.devices || [])) {       //Iterate through the devices in config.
 
       if (typeof (confDevice.name) !== 'string' ||
         typeof (confDevice.isDimmable) !== 'boolean' ||
-        typeof (confDevice.integrationID) !== 'string' ||
-        (confDevice.deviceType !== 'light' && confDevice.deviceType !== 'shade' && confDevice.deviceType !== 'motorshade')
+        !(Array.isArray(confDevice.integrationIDs) && confDevice.integrationIDs.length > 0
+          && confDevice.integrationIDs.every(item => typeof (item) === 'string')) ||
+        (confDevice.deviceType !== 'light' && confDevice.deviceType !== 'shade' &&
+          confDevice.deviceType !== 'motorshade' && confDevice.deviceType !== 'rgbwlight')
       ) {
-        this.log.error('[platform][Error] Unable to load accessory: %s', confDevice.name);
+        this.log.error('[platform][Error] Unable to load accessory: %s', confDevice.integrationIDs.toString());
         continue;
       }
 
-      const uuid = this.api.hap.uuid.generate(confDevice.integrationID);
+      const uuid = this.api.hap.uuid.generate(confDevice.integrationIDs.toString());
       let loadedAccessory = this.cachedPlatformAccessories.find(accessory => accessory.UUID === uuid);
 
       if (!loadedAccessory) {
@@ -222,11 +230,11 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       const hwa = HomeworksAccessory.CreateAccessory(this, loadedAccessory, loadedAccessory.UUID, confDevice);
       this.homeworksAccessories.push(hwa);
       hwa.lutronLevelChangeCallback = levelChangeCallback;
-      allAddedAccesories.push(loadedAccessory);
+      allAddedAccessories.push(loadedAccessory);
     }
 
     const toDelete =
-      this.difference(this.cachedPlatformAccessories, allAddedAccesories) as PlatformAccessory[];
+      this.difference(this.cachedPlatformAccessories, allAddedAccessories) as PlatformAccessory[];
 
     if (toDelete.length > 0) {
       this.log.warn('[platform] Removing: %i accesories', toDelete.length);
